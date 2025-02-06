@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
+    "build": "npm install ",
     "dev": "nodemon src/index.js",
     "start": "node src/index.js"
   },
