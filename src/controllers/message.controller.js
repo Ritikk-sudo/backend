@@ -88,8 +88,9 @@ export const sendMessage = async (req, res) => {
     // Emit the new message to the receiver
     const receiverSocketId = getReceiverSocketId(receiverId);
     if (receiverSocketId) {
-      io.to(receiverSocketId).emit("newMessage", newMessage);
+      // io.to(receiverSocketId).emit("newMessage", newMessage);
     }
+    // console.log("Message sent to receiver:", newMessage);
 
     res.status(201).json(newMessage);
   } catch (error) {
@@ -97,35 +98,61 @@ export const sendMessage = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
-
 export const getFilteredUsers = async (req, res) => {
   const { myId } = req.params;
+
   try {
-    const users = await User.find().select("-password"); // Fetch all users
+    const usersWithMessages = await User.aggregate([
+      {
+        $lookup: {
+          from: "messages",
+          let: { userId: "$_id", myId: { $toObjectId: myId } },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    {
+                      $and: [
+                        { $eq: ["$senderId", "$$myId"] },
+                        { $eq: ["$receiverId", "$$userId"] },
+                      ],
+                    },
+                    {
+                      $and: [
+                        { $eq: ["$receiverId", "$$myId"] },
+                        { $eq: ["$senderId", "$$userId"] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+            { $sort: { createdAt: -1 } }, // Get the latest message
+            { $limit: 1 },
+          ],
+          as: "messages",
+        },
+      },
+      {
+        $match: { "messages.0": { $exists: true } }, // Only users with messages
+      },
+      {
+        $project: {
+          _id: 1,
+          fullName: 1,
+          profilePic: 1,
+          lastMessage: { $arrayElemAt: ["$messages.text", 0] },
+        },
+      },
+    ]);
 
-    // Fetch the last message for each user
-    const usersWithMessages = await Promise.all(
-      users.map(async (user) => {
-        const lastMessage = await Message.findOne({
-          $or: [{ senderId: user._id }, { receiverId: user._id }],
-        })
-          .sort({ createdAt: -1 }) // Get latest message
-          .select("text createdAt senderId receiverId");
+    // Fetch current user details
+    const user = await User.findById(myId).select("-password");
 
-        return {
-          ...user.toObject(), // Convert Mongoose object to plain object
-          lastMessage: lastMessage ? lastMessage.text : null, // Attach last message
-        };
-      })
-    );
-
-    // Filter users who have at least one message
-    const filteredUsers = usersWithMessages.filter((user) => user.lastMessage);
-
-    const user = await User.findById(myId).populate("messages");
-
-    res.json({ filteredUsers, user });
+    res.json({ filteredUsers: usersWithMessages, user });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ error: "Server error" });
   }
 };
