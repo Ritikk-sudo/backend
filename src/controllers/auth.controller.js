@@ -103,6 +103,7 @@ export const updateProfile = async (req, res) => {
       { profilePic: uploadResponse.secure_url },
       { new: true }
     );
+    console.log(profilePic);
 
     res.status(200).json(updatedUser);
   } catch (error) {
