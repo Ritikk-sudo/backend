@@ -16,7 +16,9 @@ dotenv.config();
 const PORT = process.env.PORT || "5001";
 const __dirname = path.resolve();
 
-app.use(express.json());
+// Increase the body size limit to allow larger image uploads
+app.use(express.json({ limit: "10mb" })); // Increase JSON payload limit
+app.use(express.urlencoded({ limit: "10mb", extended: true })); // Increase URL-encoded payload limit
 app.use(cookieParser());
 app.use(
   cors({
